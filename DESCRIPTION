@@ -1,0 +1,9 @@
+Package: PrepCDM
+Type: Package
+Title: Functions to extract analytical inputs from CDM
+Version: 0.0.1.0
+Date: 2021-08-02
+Author: Roel Elbers
+Imports:
+	data.table
+RoxygenNote: 7.1.1
