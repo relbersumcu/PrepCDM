@@ -7,3 +7,4 @@ Author: Roel Elbers
 Imports:
 	data.table
 RoxygenNote: 7.1.1
+Roxygen: list(markdown = TRUE)
