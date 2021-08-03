@@ -8,9 +8,9 @@
 #' Roel Elbers
 #'
 #' @docType package
-#' @name PrepCDM
+#' @name CreateConceptDatasets
 #' @keywords ??
-#' @import data.table
+#' @import data.table Rcpp sqldf
 
 NULL
 
@@ -26,7 +26,7 @@ NULL
 #' @param path location to write the RDS files to per concept name
 #' @param method if SQL, a join is used. If loop a loop is used to subset
 
-#' @result RDS files to per concept name with the rows that have the code specified in the codesheet
+#' @return RDS files to per concept name with the rows that have the code specified in the codesheet
 
 #' @export
 
