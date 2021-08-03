@@ -2,3 +2,5 @@
 
 export(CreateConceptDatasets)
 import(data.table)
+import(Rcpp)
+import(sqldf)
