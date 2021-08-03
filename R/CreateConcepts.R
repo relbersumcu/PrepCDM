@@ -24,12 +24,13 @@ NULL
 #' @param f.code file code column name
 #' @param f.voc file coding system column name
 #' @param path location to write the RDS files to per concept name
+#' @param method if SQL, a join is used. If loop a loop is used to subset
 
 #' @result RDS files to per concept name with the rows that have the code specified in the codesheet
 
 #' @export
 
-CreateConceptDatasets <- function(codesheet,file, c.voc, c.concept,c.codes,c.startwith,f.code,f.voc,path ){
+CreateConceptDatasets <- function(codesheet,file, c.voc, c.concept,c.codes,c.startwith,f.code,f.voc,path,method = "SQL" ){
 
   #Get data. If not use copy input dataset may be affected (see data.table properties)
   codesheet <- copy(codesheet)
@@ -50,64 +51,129 @@ CreateConceptDatasets <- function(codesheet,file, c.voc, c.concept,c.codes,c.sta
   setnames(file,c(f.voc,f.code),c("Type2","Code2"))
 
   #Create variable code_no_dot by removing dot from all codes
-  codesheet[,code_no_dot:=gsub("\\.","",codesheet[,Code])]
-  file[,code_no_dot2:=gsub("\\.","",file[,Code2])]
+  codesheet[,code_no_dot := gsub("\\.","",codesheet[,Code])]
+  file[,code_no_dot2 := gsub("\\.","",file[,Code2])]
 
   #codesheet[,dot_present := str_detect(codesheet[,Code],"\\.")]
 
-  #Create variable to distinct codes that need to be extracted based on start with and not exact.
-  codesheet[,start_with := fifelse(substr(Code,nchar(Code),nchar(Code) + 1) == "." | Type %in% c.startwith ,T,F)]
+  #Merge codesheet to data file using sql. Then it is possible to merge on start_with or exact in 1 step
+  if(method == "SQL"){
 
-  # Create list for the for loop
-  #First 1 list with codes for exact matching
-  conditions1<-vector(mode="list", length=length(unique(na.omit(codesheet[["Concept"]]))))
-  names(conditions1)<-unique(na.omit(codesheet[["Concept"]]))
+    codesheet[,start_with := fifelse(substr(Code,nchar(Code),nchar(Code) + 1) == "." | Type %in% c.startwith ,"T","F")]
 
-  for (i in 1:length(conditions1)){
-    vocabularies<-vector(mode="list", length=length(systems_analysed))
-    names(vocabularies)<-systems_analysed
-    for (j in 1:length(vocabularies)){
-      vocabularies[[j]]$exact <- codesheet[Concept == names(conditions1)[i] & Type == names(vocabularies)[j] & start_with == F, code_no_dot]
-      vocabularies[[j]]$start <- codesheet[Concept == names(conditions1)[i] & Type == names(vocabularies)[j] & start_with == T, code_no_dot]
+    TEMP1 <- sqldf("
+          select distinct t1.*, t2.Concept
+          from file t1
+          inner join codesheet t2
+
+          on (
+                t1.Type2 = t2.Type
+
+                and
+                (
+
+                      (
+
+                      t2.start_with = 'T'
+                      and
+                      substr(t1.code_no_dot2,1,length(t2.code_no_dot)) = substr(t2.code_no_dot,1,length(t2.code_no_dot))
+                      )
+
+                      or
+
+                      (
+                      t2.start_with = 'F'
+                      and
+                      t1.code_no_dot2 = t2.code_no_dot
+                      )
+                )
+
+              )
+
+
+          ")
+
+    TEMP1 <- as.data.table(TEMP1)
+
+    #TEMP1[,start_with := NULL]
+    setorder(TEMP1, person_id, Concept,Type2, start_date_record,Code2, code_no_dot2)
+    setnames(TEMP1,c("Type2","Code2","code_no_dot2","Concept"),c(f.voc,f.code,paste0(f.code,"_2"),c.concept))
+
+
+    for(i in unique(codesheet[["Concept"]])){
+      TEMP2 <- TEMP1[get(c.concept) == i,]
+      saveRDS(object = TEMP2, file = paste0(path,"/",i,".rds"))
+      rm(TEMP2)
+      gc()
+
     }
-    conditions1[[i]]<-list.append(conditions1[[i]],vocabularies)
-    rm(vocabularies)
+
+    rm(TEMP1)
+    gc()
+
+
   }
-  #remove empty vocabularies
-  conditions1<-lapply(conditions1, function(x) Filter(length, x))
 
 
-  #Write codes to disk per concepts
+  if(method == "loop"){
+
+    #Create variable to distinct codes that need to be extracted based on start with and not exact.
+    codesheet[,start_with := fifelse(substr(Code,nchar(Code),nchar(Code) + 1) == "." | Type %in% c.startwith ,T,F)]
+
+    # Create list for the for loop
+    #First 1 list with codes for exact matching
+    conditions1<-vector(mode="list", length=length(unique(na.omit(codesheet[["Concept"]]))))
+    names(conditions1)<-unique(na.omit(codesheet[["Concept"]]))
+
+    for (i in 1:length(conditions1)){
+      vocabularies<-vector(mode="list", length=length(systems_analysed))
+      names(vocabularies)<-systems_analysed
+      for (j in 1:length(vocabularies)){
+        vocabularies[[j]]$exact <- codesheet[Concept == names(conditions1)[i] & Type == names(vocabularies)[j] & start_with == F, code_no_dot]
+        vocabularies[[j]]$start <- codesheet[Concept == names(conditions1)[i] & Type == names(vocabularies)[j] & start_with == T, code_no_dot]
+      }
+      conditions1[[i]]<-list.append(conditions1[[i]],vocabularies)
+      rm(vocabularies)
+    }
+    #remove empty vocabularies
+    conditions1<-lapply(conditions1, function(x) Filter(length, x))
+
+
+    #Write codes to disk per concepts
 
     for(i in 1:length(names(conditions1))){
 
-          TEMP <- file[0]
+      TEMP <- file[0]
 
-          for(j in 1:length(names(conditions1[[j]]))){
-          TEMP2 <- copy(file)
-          TEMP2 <- TEMP2[
+      for(j in 1:length(names(conditions1[[j]]))){
+        TEMP2 <- copy(file)
+        TEMP2 <- unique(TEMP2[
 
-            Type2 == names(conditions1[[i]][j])
-            &
+          Type2 == names(conditions1[[i]][j])
+          &
             (
-            length(conditions1[[i]][[j]]$start) > 0 & grepl(pattern =  paste0("^",conditions1[[i]][[j]]$start,collapse ="|"), x = code_no_dot2)
-            |
-            length(conditions1[[i]][[j]]$exact) > 0 & code_no_dot2 %in% conditions1[[i]][[j]]$exact
+              length(conditions1[[i]][[j]]$start) > 0 & grepl(pattern =  paste0("^",conditions1[[i]][[j]]$start,collapse ="|"), x = code_no_dot2)
+              |
+                length(conditions1[[i]][[j]]$exact) > 0 & code_no_dot2 %in% conditions1[[i]][[j]]$exact
             )
 
-            ,]
+          ,])
 
-          TEMP <- rbindlist(list(TEMP,TEMP2),fill = T, use.names = T)
-          rm(TEMP2)
-          }
+        TEMP <- rbindlist(list(TEMP,TEMP2),fill = T, use.names = T)
+        rm(TEMP2)
+      }
 
-    TEMP <- TEMP[, Concept := names(conditions1)[[i]]]
-    saveRDS(object = TEMP, file = paste0(path,"/",names(conditions1)[[i]],".rds"))
-    rm(TEMP)
-    gc()
+      TEMP <- TEMP[, Concept := names(conditions1)[[i]]]
+      #TEMP[,start_with := NULL]
+      setorder(TEMP, person_id, Concept,Type2, start_date_record,Code2, code_no_dot2)
+      setnames(TEMP,c("Type2","Code2","code_no_dot2","Concept"),c(f.voc,f.code,paste0(f.code,"_2"),c.concept))
+
+      saveRDS(object = TEMP, file = paste0(path,"/",names(conditions1)[[i]],".rds"))
+      rm(TEMP)
+      gc()
+    }
+
   }
-
-
 
 
 }
