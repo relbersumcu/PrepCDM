@@ -5,9 +5,8 @@ test_that("multiplication works", {
 
 
 test_that("Correct output", {
+  options(warn = -1)
   library(PrepCDM)
-  library(sqldf)
-  library(Rcpp)
 
           FILE <- fread("Events.csv")[,.(Coding_system,Code,sheet)]
 
@@ -39,7 +38,7 @@ test_that("Correct output", {
             #expect_equal(sum((ncol(OUTPUT) == ncol(TEST)) == F) > 0, 0)
             #expect_equal(sum((colnames(OUTPUT) == colnames(TEST)) == F), 0)
             expect_equal(sum((OUTPUT == TEST) == F), 0)
-            expect_equal(sum((OUTPUT == TEST) == F), 1.2)
+
 
           }
 

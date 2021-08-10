@@ -1,6 +1,11 @@
 
 rm(list = ls(all=TRUE))
 
+invisible(lapply(paste0("package:", names(sessionInfo()$otherPkgs)),   # Unload add-on packages
+                 detach,
+                 character.only = TRUE, unload = TRUE))
+
+
 if(!require(rstudioapi)){install.packages("rstudioapi")}
 library(rstudioapi)
 
@@ -14,47 +19,55 @@ library(devtools)
 if(!require(knitr)){install.packages("knitr")}
 library(knitr)
 
-devtools::install_github("klutometis/roxygen")
-
+if(!require(devtools)) {devtools::install_github("klutometis/roxygen")}
 library(roxygen2)
-
 
 if(!require(testthat)){install.packages("testthat")}
 library(testthat)
 
-create("cats")
 
-setwd("./cats")
-document()
-
-
-
-setwd("..")
-
-install("cats")
+#Test functions according to specified unit tests
+x <- NULL
+x <- devtools::test(stop_on_failure = T)
+#devtools::check()
 
 
 
-install.packages("PrepCDM")
-library("PrepCDM")
+#If test is correct then
+if(!is.null(x)){
 
-CreateConceptDatasets()
+      #update RD, Namespace
+      #roxygen2::roxygenise()
+      devtools::document(pkg = ".", roclets = c('rd', 'collate', 'namespace', 'vignette'), quiet = FALSE)
 
-??CreateConceptDatasets
+      #Build
+      devtools::build(quiet = T)
 
-
-install_github('PrepCDM','relbersumcu')
-
-setwd("C:/PrepCDM")
-devtools::install()
-usethis::use_roxygen_md()
-
-roxygen2::roxygenise()
-
-usethis::use_test("CreateConceptDatasets")
-
-devtools::test()
-rcmdcheck::rcmdcheck(args = "--no-manual", error_on = "error")
+      #Detach all user installed packages
+      invisible(lapply(paste0("package:", names(sessionInfo()$otherPkgs)),   # Unload add-on packages
+                       detach,
+                       character.only = TRUE, unload = TRUE))
 
 
-help(CreateConceptDatasets)
+      #Reinstall
+      if("PrepCDM" %in% .packages(all.available = TRUE)) remove.packages("PrepCDM")
+      library("devtools")
+      devtools::install()
+
+      library("PrepCDM")
+
+      help(package = "PrepCDM")
+
+
+
+}
+
+
+
+#install_github('PrepCDM','relbersumcu')
+
+
+
+
+
+
