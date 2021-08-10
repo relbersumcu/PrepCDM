@@ -10,7 +10,7 @@
 #' @docType package
 #' @name CreateConceptDatasets
 #' @keywords ??
-#' @import data.table Rcpp sqldf
+#' @import data.table Rcpp sqldf MASS
 
 NULL
 
